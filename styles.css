@@ -1,0 +1,274 @@
+:root {
+  --green: #2f5d3a;
+  --green-dark: #234a2d;
+  --green-light: #e7f0e7;
+  --green-accent: #5a9367;
+  --bg: #f6f4ee;
+  --card: #ffffff;
+  --ink: #26302a;
+  --muted: #8a948c;
+  --done-bg: #e4e6e3;
+  --done-ink: #aab0aa;
+  --shadow: 0 1px 3px rgba(35, 74, 45, 0.12);
+  --radius: 14px;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.45;
+}
+
+/* ---------- Header ---------- */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--green);
+  color: #fff;
+  padding: calc(env(safe-area-inset-top) + 12px) 16px 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.title-block h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.subtitle {
+  margin: 2px 0 0;
+  font-size: 0.72rem;
+  opacity: 0.82;
+}
+
+.repeat-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  padding: 4px;
+  border-radius: 999px;
+}
+
+.round-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--green);
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.round-btn:active { transform: scale(0.92); }
+.round-btn:disabled { opacity: 0.4; cursor: default; }
+
+.repeat-readout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 56px;
+  font-size: 0.95rem;
+}
+.repeat-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.8; }
+.repeat-readout strong { font-size: 1.2rem; }
+
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 640px;
+  margin: 10px auto 0;
+}
+.progress-bar {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background: #cfe6c9;
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+.progress-text { font-size: 0.72rem; opacity: 0.92; white-space: nowrap; }
+
+/* ---------- Main ---------- */
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 14px 12px calc(env(safe-area-inset-bottom) + 40px);
+}
+
+.cast-on-card {
+  background: var(--green-light);
+  border: 1px solid #d3e2d3;
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  font-size: 0.88rem;
+}
+.cast-on-card p { margin: 0 0 6px; }
+.cast-on-card p:last-child { margin-bottom: 0; }
+.cast-on-card .hint { color: var(--green-dark); font-size: 0.78rem; opacity: 0.9; }
+
+/* ---------- Rows ---------- */
+.rows { display: flex; flex-direction: column; gap: 10px; }
+
+.row-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border-left: 4px solid transparent;
+  padding: 10px 12px;
+  transition: border-color 0.2s ease, opacity 0.2s ease;
+}
+.row-card.active { border-left-color: var(--green-accent); }
+.row-card.complete { opacity: 0.55; }
+
+.row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.row-number {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--green-dark);
+}
+.row-badge {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--green-accent);
+  color: #fff;
+}
+.row-card.complete .row-badge { background: var(--done-ink); }
+.row-count { margin-left: auto; font-size: 0.68rem; color: var(--muted); }
+
+.groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  position: relative;
+  border: 1.5px solid #d7e0d8;
+  background: #fff;
+  border-radius: 10px;
+  padding: 9px 11px 7px;
+  min-width: 46px;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.08s ease;
+}
+.chip:active { transform: scale(0.94); }
+.chip .chip-index {
+  display: block;
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--green-accent);
+  text-transform: uppercase;
+}
+.chip .chip-text {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.chip.done {
+  background: var(--done-bg);
+  border-color: var(--done-bg);
+}
+.chip.done .chip-text { color: var(--done-ink); text-decoration: line-through; }
+.chip.done .chip-index { color: var(--done-ink); }
+
+.chip.next {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(90, 147, 103, 0.25);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(90, 147, 103, 0.22); }
+  50% { box-shadow: 0 0 0 6px rgba(90, 147, 103, 0.10); }
+}
+
+/* ---------- Actions / glossary / footer ---------- */
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin: 22px 0 10px;
+}
+.text-btn {
+  background: none;
+  border: none;
+  color: var(--green-dark);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px;
+  text-decoration: underline;
+}
+.text-btn.danger { color: #a8453b; }
+
+.glossary {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+  margin-top: 10px;
+  font-size: 0.85rem;
+}
+.glossary summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--green-dark);
+}
+.glossary dl { margin: 10px 0 0; }
+.glossary dt { font-weight: 700; margin-top: 8px; color: var(--green-dark); }
+.glossary dd { margin: 2px 0 0; color: #4a554c; }
+
+.credit {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.credit p { margin: 2px 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .chip.next { animation: none; }
+}

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#2f5d3a" />
+  <meta name="description" content="A mobile stitch tracker for the Daphne lace scarf knitting pattern." />
+  <title>Daphne · Stitch Tracker</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="title-block">
+        <h1>Daphne</h1>
+        <p class="subtitle">Lace laurel leaf scarf · stitch tracker</p>
+      </div>
+
+      <div class="repeat-nav" aria-label="Repeat selector">
+        <button id="repeatPrev" class="round-btn" aria-label="Previous repeat">&minus;</button>
+        <div class="repeat-readout">
+          <span class="repeat-label">Repeat</span>
+          <span><strong id="repeatNum">1</strong> / 12</span>
+        </div>
+        <button id="repeatNext" class="round-btn" aria-label="Next repeat">+</button>
+      </div>
+    </div>
+
+    <div class="progress-row">
+      <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+      <span id="progressText" class="progress-text">Row 1 · 0%</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="cast-on-card">
+      <p><strong>Cast on 30 stitches.</strong> Work the 24 rows below, then repeat them 12 times (or until the scarf is as long as you like). Bind off and weave in ends.</p>
+      <p class="hint">Tap each stitch group as you knit it to grey it out. The active row is highlighted and the next group to work pulses.</p>
+    </section>
+
+    <div id="rows" class="rows"></div>
+
+    <section class="actions">
+      <button id="resetRepeat" class="text-btn">Reset this repeat</button>
+      <button id="resetAll" class="text-btn danger">Reset everything</button>
+    </section>
+
+    <details class="glossary">
+      <summary>Stitch glossary</summary>
+      <dl>
+        <dt>P2tog</dt><dd>Purl two stitches together.</dd>
+        <dt>Inc 1</dt><dd>Knit into the front and the back of the same stitch.</dd>
+        <dt>Yo</dt><dd>Yarn over. Wrap the yarn over the right-hand needle.</dd>
+        <dt>Inc 1 ps</dt><dd>Purl into the front and the back of the same stitch.</dd>
+        <dt>Ssk</dt><dd>Slip, slip, knit. Slip the next two stitches knitwise to the right needle, return them to the left needle, and knit them together.</dd>
+        <dt>K2tog</dt><dd>Knit two stitches together.</dd>
+        <dt>M1</dt><dd>Make one: pick up the yarn between two stitches with the left needle and knit into the back of it.</dd>
+        <dt>Sk2p</dt><dd>Slip the first stitch, knit the next two together, pass the slipped stitch over. Decreases two stitches.</dd>
+      </dl>
+    </details>
+
+    <footer class="credit">
+      <p>Pattern: <em>Daphne</em> &copy; 2011 Saranac Hale Spencer &amp; the Defarge Knittery.</p>
+      <p>Progress is saved on this device only.</p>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
