@@ -2,6 +2,83 @@
   "use strict";
 
   /* ============================================================
+   * Standard stitch lexicon (abbreviation -> plain definition)
+   *
+   * These are STANDARD, non-copyrightable knitting abbreviations
+   * (the kind published in the Craft Yarn Council master list and
+   * common glossaries). No pattern-specific text is included here.
+   * Synonyms map to the same definition; "(= yo)" etc. notes the
+   * common equivalents.
+   * ========================================================== */
+  var LEX = {
+    "k": "Knit.",
+    "p": "Purl.",
+    "st": "Stitch.",
+    "sts": "Stitches.",
+    "co": "Cast on.",
+    "bo": "Bind off (cast off).",
+    "rs": "Right side.",
+    "ws": "Wrong side.",
+    "tog": "Together.",
+    "tbl": "Through the back loop.",
+    "ktbl": "Knit through the back loop (twisted).",
+    "ptbl": "Purl through the back loop.",
+    "yo": "Yarn over.",
+    "yf": "Yarn forward (= yarn over).",
+    "yfwd": "Yarn forward (= yarn over).",
+    "yon": "Yarn over needle (= yarn over).",
+    "yrn": "Yarn round needle (= yarn over).",
+    "k2tog": "Knit two stitches together (right-leaning decrease).",
+    "k3tog": "Knit three stitches together.",
+    "p2tog": "Purl two stitches together.",
+    "p3tog": "Purl three stitches together.",
+    "ssk": "Slip, slip, knit: slip two stitches knitwise, then knit them together through the back loops (left-leaning decrease).",
+    "ssp": "Slip, slip, purl the two slipped stitches together through the back loops.",
+    "sssk": "Slip, slip, slip, then knit the three slipped stitches together (double decrease).",
+    "sl": "Slip a stitch (purlwise unless stated).",
+    "sl1": "Slip one stitch.",
+    "psso": "Pass the slipped stitch over.",
+    "p2sso": "Pass the two slipped stitches over.",
+    "skp": "Slip 1, knit 1, pass the slipped stitch over (left-leaning decrease).",
+    "sk2p": "Slip 1, knit 2 together, pass the slipped stitch over (double decrease).",
+    "s2kp": "Slip 2 together, knit 1, pass the two slipped stitches over (centered double decrease).",
+    "cdd": "Centered double decrease.",
+    "m1": "Make one stitch (increase).",
+    "m1l": "Make one left-leaning increase.",
+    "m1r": "Make one right-leaning increase.",
+    "m1p": "Make one purlwise.",
+    "kfb": "Knit into the front and back of the stitch (increase).",
+    "pfb": "Purl into the front and back of the stitch (increase).",
+    "inc": "Increase.",
+    "dec": "Decrease.",
+    "rep": "Repeat.",
+    "patt": "Pattern.",
+    "pat": "Pattern.",
+    "beg": "Beginning.",
+    "cont": "Continue.",
+    "rem": "Remaining.",
+    "pm": "Place marker.",
+    "sm": "Slip marker.",
+    "rm": "Remove marker.",
+    "wyib": "With yarn in back.",
+    "wyif": "With yarn in front.",
+    "kwise": "Knitwise.",
+    "pwise": "Purlwise.",
+    "w&t": "Wrap and turn (short rows).",
+    "cn": "Cable needle.",
+    "c4f": "Cable 4 front: hold 2 stitches on cable needle in front, knit 2, then knit 2 from cable needle.",
+    "c4b": "Cable 4 back: hold 2 stitches on cable needle in back, knit 2, then knit 2 from cable needle.",
+    "c6f": "Cable 6 front.",
+    "c6b": "Cable 6 back.",
+    "lc": "Left cross (cable).",
+    "rc": "Right cross (cable).",
+    "rnd": "Round.",
+    "rnds": "Rounds.",
+    "mc": "Main color.",
+    "cc": "Contrast color."
+  };
+
+  /* ============================================================
    * Built-in sample pattern: Daphne lace scarf
    * ========================================================== */
   var DAPHNE_ROWS = [
@@ -43,70 +120,251 @@
   ];
 
   /* ============================================================
-   * Helpers
+   * Parsing primitives
    * ========================================================== */
 
-  // Split a row string into stitch groups on commas, keeping
-  // parenthesised groups like "(k1, yo) twice" intact.
+  // Split a row body into stitch groups on top-level commas, keeping
+  // bracketed groups — both "( … )" and "[ … ]" — intact.
   function splitGroups(s) {
-    var groups = [], depth = 0, cur = "";
+    var groups = [], depth = 0, star = false, cur = "";
     for (var i = 0; i < s.length; i++) {
       var ch = s[i];
-      if (ch === "(") depth++;
-      if (ch === ")") depth--;
-      if (ch === "," && depth === 0) { groups.push(cur.trim()); cur = ""; }
+      if (ch === "(" || ch === "[") depth++;
+      else if (ch === ")" || ch === "]") depth = Math.max(0, depth - 1);
+      else if (ch === "*") star = !star; // protect *…* repeat sections
+      if (ch === "," && depth === 0 && !star) { groups.push(cur); cur = ""; }
       else cur += ch;
     }
-    if (cur.trim()) groups.push(cur.trim());
-    return groups;
+    if (cur.trim()) groups.push(cur);
+    return groups
+      .map(function (g) { return g.replace(/^[\s,;]+|[\s,;.]+$/g, "").trim(); })
+      .filter(function (g) { return g.length > 0; });
   }
 
-  function newId() {
-    return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  // Header for a row/round line. Captures keyword, start number, an
+  // optional qualifier (e.g. " (RS)", " and all following WS rows until
+  // row 34", "-3"), then ":" or a spaced dash, then the body.
+  var HEADER_RE = /^(rows?|rounds?|rnds?)\s+(\d+)([^:]*?)(?::|\s[–—-]\s)\s*(.+)$/i;
+
+  // Turn a body string into a row record, stripping a trailing stitch
+  // count annotation like "(3 sts)" or "(55(63,71,…) sts)".
+  function buildRow(label, side, body) {
+    var count = null;
+    body = body.replace(
+      /\(((?:[^()]|\([^()]*\))*?)\s*sts?\.?\s*\)\s*\.?\s*$/i,
+      function (_, c) { count = (c || "").trim(); return " "; }
+    );
+    body = body.trim().replace(/[.;]+$/, "").trim();
+    return { label: label, side: side || null, count: count, groups: splitGroups(body) };
   }
 
-  // Build a project object from raw fields.
-  function makeProject(name, intro, repeats, rowStrings, glossary) {
+  // Expand one logical line into one or more row records, applying
+  // range expansion ("Row 6 and all following WS rows until row 34"
+  // -> rows 6, 8, … 34). ctx.auto numbers header-less manual lines.
+  function expandHeaderToRows(line, ctx) {
+    line = (line || "").trim();
+    if (!line) return [];
+    var m = line.match(HEADER_RE);
+    if (!m) {
+      var r = buildRow("Row " + (ctx.auto++), null, line);
+      return r.groups.length ? [r] : [];
+    }
+    var startNum = parseInt(m[2], 10);
+    var qualifier = m[3] || "";
+    var body = m[4] || "";
+
+    var sideM = qualifier.match(/\b(RS|WS)\b/i) || body.match(/^\s*\((RS|WS)\)/i);
+    var side = sideM ? sideM[1].toUpperCase() : null;
+    body = body.replace(/^\s*\((?:RS|WS)\)\s*/i, "").trim();
+
+    var end = startNum, step = 1;
+    var untilM = qualifier.match(/until\s+(?:row\s+)?(\d+)/i);
+    var dashM = qualifier.match(/^\s*[-–—]\s*(\d+)/);
+    if (untilM) {
+      end = parseInt(untilM[1], 10);
+      if (/\b(?:WS|RS)\b|every other|alternate|following/i.test(qualifier)) step = 2;
+    } else if (dashM) {
+      end = parseInt(dashM[1], 10);
+    }
+    if (end < startNum) end = startNum;
+
+    var rows = [];
+    for (var n = startNum; n <= end && (n - startNum) <= 600; n += (step || 1)) {
+      var row = buildRow("Row " + n, side, body);
+      if (row.groups.length) rows.push(row);
+    }
+    return rows;
+  }
+
+  // De-duplicate by row number (last definition wins, so a later
+  // "Rows 34 …" override beats an earlier range), then sort by number.
+  function dedupSortRows(rows) {
+    var map = {}, order = [], synth = 0;
+    rows.forEach(function (r) {
+      var nm = (r.label || "").match(/(\d+)/);
+      var key = nm ? "n" + parseInt(nm[1], 10) : "s" + (synth++);
+      if (!(key in map)) order.push(key);
+      map[key] = r;
+    });
+    var out = order.map(function (k) { return map[k]; });
+    out.sort(function (a, b) {
+      var na = (a.label.match(/\d+/) || [1e9])[0];
+      var nb = (b.label.match(/\d+/) || [1e9])[0];
+      return parseInt(na, 10) - parseInt(nb, 10);
+    });
+    return out;
+  }
+
+  // Tokenise a group into candidate abbreviation tokens.
+  function tokenize(g) {
+    return (g || "").split(/[^A-Za-z0-9\/&]+/).filter(Boolean);
+  }
+
+  // Build a glossary: PDF-extracted definitions first (the user's own
+  // file, kept on-device), then standard lexicon entries for any
+  // abbreviation actually used that isn't already covered.
+  function buildGlossary(rows, pdfGloss) {
+    var seen = {}, out = [];
+    (pdfGloss || []).forEach(function (pair) {
+      var key = String(pair[0]).toLowerCase().trim();
+      if (key && !seen[key]) { seen[key] = 1; out.push([pair[0].trim(), pair[1].trim()]); }
+    });
+    rows.forEach(function (r) {
+      r.groups.forEach(function (g) {
+        tokenize(g).forEach(function (tok) {
+          var lc = tok.toLowerCase();
+          var base = lc.replace(/\d+$/, "");
+          var def = LEX[lc] || LEX[base];
+          if (def && !seen[lc]) { seen[lc] = 1; out.push([tok, def]); }
+        });
+      });
+    });
+    return out;
+  }
+
+  // Parse a list of reconstructed PDF text lines into a pattern.
+  function parsePattern(lines) {
+    var logical = [];
+    var intro = null, repeats = 0, glossary = [], notes = [];
+    var curRow = null, curGloss = null;
+
+    var STOP_RE = /^(now\b|when\b|repeat rows|repeat from|cast on|co\b|bind off|bo\b|cut yarn|remember|see how|work like this|page\s*\d|key to|general abbreviations|written pattern|all slipped|the video|for size|©|copyright)/i;
+    var GLOSS_RE = /^([A-Za-z0-9][A-Za-z0-9 \/–\-]{0,30}?)\s*[:=]\s*(.+)$/;
+
+    function flushRow() { if (curRow != null) { logical.push(curRow.trim()); curRow = null; } }
+    function flushGloss() { if (curGloss) { glossary.push([curGloss[0].trim(), curGloss[1].trim()]); curGloss = null; } }
+
+    lines.forEach(function (raw) {
+      var line = (raw || "").trim();
+      if (!line) return;
+
+      // Page footers / copyright banners: never part of a row or glossary.
+      if (/©|copyright/i.test(line)) { flushRow(); flushGloss(); return; }
+
+      if (HEADER_RE.test(line)) { flushRow(); flushGloss(); curRow = line; return; }
+
+      if (STOP_RE.test(line)) {
+        flushRow(); flushGloss();
+        if (intro == null && /^cast on/i.test(line)) intro = line.replace(/\s+/g, " ").trim();
+        if (/^(now|repeat rows|work rows)/i.test(line)) notes.push(line.replace(/\s+/g, " ").trim());
+        return;
+      }
+
+      if (curRow != null) { curRow += " " + line; return; } // wrapped row
+
+      var gm = line.match(GLOSS_RE);
+      if (gm) { flushGloss(); curGloss = [gm[1], gm[2]]; return; }
+      if (curGloss) { curGloss[1] += " " + line; return; }   // wrapped definition
+
+      if (intro == null && /^cast on/i.test(line)) intro = line.replace(/\s+/g, " ").trim();
+    });
+    flushRow(); flushGloss();
+
+    var ctx = { auto: 1 }, rows = [];
+    logical.forEach(function (l) { expandHeaderToRows(l, ctx).forEach(function (r) { rows.push(r); }); });
+    rows = dedupSortRows(rows);
+
+    return { rows: rows, intro: intro, repeats: repeats, glossary: glossary, notes: notes };
+  }
+
+  function serializeRow(r) {
+    return r.label + (r.side ? " (" + r.side + ")" : "") + ": " +
+      r.groups.join(", ") + (r.count ? " (" + r.count + " sts)" : "");
+  }
+
+  // Expose pure helpers for testing.
+  window.KnitParser = {
+    splitGroups: splitGroups, buildRow: buildRow, expandHeaderToRows: expandHeaderToRows,
+    dedupSortRows: dedupSortRows, parsePattern: parsePattern, buildGlossary: buildGlossary,
+    serializeRow: serializeRow, LEX: LEX
+  };
+
+  /* ============================================================
+   * Project model helpers
+   * ========================================================== */
+  function newId() { return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+  function rowsFromStrings(strings) {
+    return strings.map(function (s, i) {
+      return { label: "Row " + (i + 1), side: null, count: null, groups: splitGroups(s) };
+    });
+  }
+
+  function makeProject(name, intro, repeats, rowObjs, glossary) {
     return {
       id: newId(),
       name: name || "Untitled pattern",
       intro: intro || "",
       repeats: Math.max(1, repeats | 0) || 1,
-      rows: rowStrings.map(splitGroups),
+      rows: rowObjs,
       glossary: glossary || [],
       currentRepeat: 1,
-      cursors: {} // repeat number -> step index (0..totalSteps)
+      cursors: {}
     };
+  }
+
+  // Coerce any stored project (including older array-of-strings rows)
+  // into the current row-object shape. Cursors stay valid because group
+  // counts are unchanged.
+  function normalizeProject(p) {
+    p.rows = (p.rows || []).map(function (r, i) {
+      if (Array.isArray(r)) return { label: "Row " + (i + 1), side: null, count: null, groups: r };
+      return {
+        label: r.label || ("Row " + (i + 1)),
+        side: r.side != null ? r.side : null,
+        count: r.count != null ? r.count : null,
+        groups: r.groups || []
+      };
+    });
+    if (!p.cursors) p.cursors = {};
+    if (!p.currentRepeat) p.currentRepeat = 1;
+    if (!p.glossary) p.glossary = [];
+    if (!p.repeats) p.repeats = 1;
+    return p;
   }
 
   function flatten(proj) {
     var f = [];
-    proj.rows.forEach(function (groups, ri) {
-      groups.forEach(function (text, gi) { f.push({ ri: ri, gi: gi, text: text }); });
+    proj.rows.forEach(function (row, ri) {
+      row.groups.forEach(function (text, gi) { f.push({ ri: ri, gi: gi, text: text }); });
     });
     return f;
   }
-
   function totalSteps(proj) {
-    return proj.rows.reduce(function (sum, g) { return sum + g.length; }, 0);
+    return proj.rows.reduce(function (sum, r) { return sum + r.groups.length; }, 0);
   }
-
-  function getCursor(proj) {
-    return proj.cursors[proj.currentRepeat] || 0;
-  }
-
+  function getCursor(proj) { return proj.cursors[proj.currentRepeat] || 0; }
   function setCursor(proj, c) {
-    var max = totalSteps(proj);
-    proj.cursors[proj.currentRepeat] = Math.max(0, Math.min(c, max));
+    proj.cursors[proj.currentRepeat] = Math.max(0, Math.min(c, totalSteps(proj)));
     save();
   }
+  function rowLabel(row) { return row.label + (row.side ? " (" + row.side + ")" : ""); }
 
   /* ============================================================
    * Storage (with migration from the v1 single-pattern format)
    * ========================================================== */
   var KEY = "knit-tracker-v2";
   var OLD_KEY = "daphne-stitch-tracker-v1";
-
   var store = loadStore();
 
   function loadStore() {
@@ -114,14 +372,17 @@
       var raw = localStorage.getItem(KEY);
       if (raw) {
         var parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.projects)) return parsed;
+        if (parsed && Array.isArray(parsed.projects)) {
+          parsed.projects.forEach(normalizeProject);
+          return parsed;
+        }
       }
     } catch (e) { /* fall through to fresh/migrated store */ }
 
     var s = { projects: [], activeId: null };
-    var daphne = makeProject("Daphne", "Cast on 30 stitches. Bind off and weave in ends when done.", 12, DAPHNE_ROWS, DAPHNE_GLOSSARY);
+    var daphne = makeProject("Daphne", "Cast on 30 stitches. Bind off and weave in ends when done.",
+      12, rowsFromStrings(DAPHNE_ROWS), DAPHNE_GLOSSARY);
 
-    // Non-destructive migration of any saved v1 progress into the Daphne project.
     try {
       var oldRaw = localStorage.getItem(OLD_KEY);
       if (oldRaw) {
@@ -130,14 +391,11 @@
           daphne.currentRepeat = old.currentRepeat || 1;
           var max = totalSteps(daphne);
           Object.keys(old.progress).forEach(function (rep) {
-            var rowsMap = old.progress[rep] || {};
-            var done = 0;
+            var rowsMap = old.progress[rep] || {}, done = 0;
             Object.keys(rowsMap).forEach(function (ri) {
               var arr = rowsMap[ri] || [];
               for (var i = 0; i < arr.length; i++) if (arr[i]) done++;
             });
-            // v1 allowed gaps; the cursor model is linear, so we keep the
-            // number of completed groups and treat them as the first N done.
             daphne.cursors[rep] = Math.min(done, max);
           });
         }
@@ -149,10 +407,7 @@
     return s;
   }
 
-  function save() {
-    try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) { /* storage full / disabled */ }
-  }
-
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) { /* ignore */ } }
   function activeProject() {
     return store.projects.filter(function (p) { return p.id === store.activeId; })[0] || null;
   }
@@ -167,7 +422,6 @@
     closeKnit();
     renderLibrary();
   }
-
   function openProject(id) {
     store.activeId = id;
     save();
@@ -194,20 +448,15 @@
       return;
     }
     store.projects.forEach(function (proj) {
-      var max = totalSteps(proj);
-      var doneOverall = 0;
+      var max = totalSteps(proj), doneOverall = 0;
       for (var r = 1; r <= proj.repeats; r++) doneOverall += Math.min(proj.cursors[r] || 0, max);
       var pct = max && proj.repeats ? Math.round((doneOverall / (max * proj.repeats)) * 100) : 0;
 
       var card = document.createElement("div");
       card.className = "project-card";
       card.innerHTML =
-        '<div class="pc-main">' +
-          '<h3></h3>' +
-          '<div class="pc-meta"></div>' +
-          '<div class="pc-bar"><div class="pc-fill"></div></div>' +
-        '</div>' +
-        '<div class="pc-go">›</div>';
+        '<div class="pc-main"><h3></h3><div class="pc-meta"></div>' +
+        '<div class="pc-bar"><div class="pc-fill"></div></div></div><div class="pc-go">›</div>';
       card.querySelector("h3").textContent = proj.name;
       card.querySelector(".pc-meta").textContent =
         proj.rows.length + " rows · " + proj.repeats + " repeat" + (proj.repeats === 1 ? "" : "s") + " · " + pct + "% done";
@@ -222,7 +471,6 @@
    * ========================================================== */
   var rowsEl = document.getElementById("rows");
   var repeatNumEl = document.getElementById("repeatNum");
-  var repeatTotalEl = document.getElementById("repeatTotal");
   var repeatPrevEl = document.getElementById("repeatPrev");
   var repeatNextEl = document.getElementById("repeatNext");
   var progressFillEl = document.getElementById("progressFill");
@@ -233,14 +481,11 @@
     if (!proj) { showLibrary(); return; }
 
     document.getElementById("projTitle").textContent = proj.name;
-    document.getElementById("projSubtitle").textContent =
-      proj.rows.length + " rows · repeat " + proj.repeats + "×";
+    document.getElementById("projSubtitle").textContent = proj.rows.length + " rows · repeat " + proj.repeats + "×";
     document.getElementById("repeatTotal").textContent = proj.repeats;
+    document.getElementById("introText").textContent =
+      proj.intro || ("Work the " + proj.rows.length + " rows, then repeat " + proj.repeats + " times.");
 
-    var introEl = document.getElementById("introText");
-    introEl.textContent = proj.intro || ("Work the " + proj.rows.length + " rows, then repeat " + proj.repeats + " times.");
-
-    // Glossary
     var box = document.getElementById("glossaryBox");
     var dl = document.getElementById("glossaryList");
     dl.innerHTML = "";
@@ -251,14 +496,11 @@
         dl.appendChild(dt); dl.appendChild(dd);
       });
       box.hidden = false;
-    } else {
-      box.hidden = true;
-    }
+    } else { box.hidden = true; }
 
-    // Rows + chips. Each chip carries its flat step index.
     rowsEl.innerHTML = "";
     var flatIndex = 0;
-    proj.rows.forEach(function (groups, rowIdx) {
+    proj.rows.forEach(function (row, rowIdx) {
       var card = document.createElement("section");
       card.className = "row-card";
       card.dataset.row = rowIdx;
@@ -267,8 +509,14 @@
       head.className = "row-head";
       var num = document.createElement("span");
       num.className = "row-number";
-      num.textContent = "Row " + (rowIdx + 1);
+      num.textContent = rowLabel(row);
       head.appendChild(num);
+      if (row.count) {
+        var note = document.createElement("span");
+        note.className = "row-note";
+        note.textContent = row.count + " sts";
+        head.appendChild(note);
+      }
       var badge = document.createElement("span");
       badge.className = "row-badge";
       badge.textContent = "done";
@@ -281,7 +529,7 @@
 
       var groupsEl = document.createElement("div");
       groupsEl.className = "groups";
-      groups.forEach(function (text, groupIdx) {
+      row.groups.forEach(function (text, groupIdx) {
         var fi = flatIndex++;
         var chip = document.createElement("button");
         chip.className = "chip";
@@ -305,8 +553,6 @@
   function onChipClick(flatIndex) {
     var proj = activeProject();
     var c = getCursor(proj);
-    // Cursor model: tapping an undone group marks through it; tapping a
-    // done group rolls the cursor back to just before it.
     if (flatIndex < c) setCursor(proj, flatIndex);
     else setCursor(proj, flatIndex + 1);
     refreshTracker();
@@ -315,18 +561,15 @@
   function refreshTracker() {
     var proj = activeProject();
     if (!proj) return;
-    var cursor = getCursor(proj);
-    var max = totalSteps(proj);
+    var cursor = getCursor(proj), max = totalSteps(proj);
 
     repeatNumEl.textContent = proj.currentRepeat;
     repeatPrevEl.disabled = proj.currentRepeat <= 1;
     repeatNextEl.disabled = proj.currentRepeat >= proj.repeats;
 
-    // Which row holds the cursor (the active row).
-    var activeRow = proj.rows.length; // default: all complete
-    var acc = 0;
+    var activeRow = proj.rows.length, acc = 0;
     for (var i = 0; i < proj.rows.length; i++) {
-      var len = proj.rows[i].length;
+      var len = proj.rows[i].groups.length;
       if (cursor < acc + len) { activeRow = i; break; }
       acc += len;
     }
@@ -370,24 +613,16 @@
   }
 
   /* ============================================================
-   * Knitting mode (full-screen, tap to advance)
+   * Knitting mode
    * ========================================================== */
   var knitEl = document.getElementById("knitMode");
-
-  function openKnit() {
-    knitEl.hidden = false;
-    refreshKnit();
-  }
-  function closeKnit() {
-    knitEl.hidden = true;
-  }
+  function openKnit() { knitEl.hidden = false; refreshKnit(); }
+  function closeKnit() { knitEl.hidden = true; }
 
   function refreshKnit() {
     var proj = activeProject();
     if (!proj) return;
-    var flat = flatten(proj);
-    var cursor = getCursor(proj);
-    var max = flat.length;
+    var flat = flatten(proj), cursor = getCursor(proj), max = flat.length;
 
     var metaEl = document.getElementById("knitMeta");
     var rowLabelEl = document.getElementById("knitRowLabel");
@@ -397,11 +632,9 @@
     var nextEl = document.getElementById("knitNext");
 
     groupEl.classList.remove("complete");
-    nextEl.innerHTML = "";
-    ctxEl.innerHTML = "";
+    nextEl.innerHTML = ""; ctxEl.innerHTML = "";
 
     if (cursor >= max) {
-      // Repeat finished.
       metaEl.textContent = "Repeat " + proj.currentRepeat + " / " + proj.repeats;
       rowLabelEl.textContent = "";
       groupEl.classList.add("complete");
@@ -413,30 +646,22 @@
         btn.textContent = "Start repeat " + (proj.currentRepeat + 1);
         btn.addEventListener("click", function (e) {
           e.stopPropagation();
-          proj.currentRepeat += 1;
-          save();
-          refreshTracker();
-          refreshKnit();
+          proj.currentRepeat += 1; save(); refreshTracker(); refreshKnit();
         });
         nextEl.appendChild(btn);
-      } else {
-        groupEl.textContent = "Pattern complete 🎉";
-      }
+      } else { groupEl.textContent = "Pattern complete 🎉"; }
       return;
     }
 
-    var step = flat[cursor];
+    var step = flat[cursor], row = proj.rows[step.ri];
     metaEl.textContent =
-      "Repeat " + proj.currentRepeat + " / " + proj.repeats +
-      " · Row " + (step.ri + 1) + " / " + proj.rows.length;
-    rowLabelEl.textContent = "Row " + (step.ri + 1) + " — S" + (step.gi + 1);
+      "Repeat " + proj.currentRepeat + " / " + proj.repeats + " · " + rowLabel(row);
+    rowLabelEl.textContent = rowLabel(row) + " — S" + (step.gi + 1);
     groupEl.textContent = step.text;
     stepEl.textContent = "step " + (cursor + 1) + " of " + max;
 
-    // Context: the current row's groups with the current one highlighted.
-    var rowGroups = proj.rows[step.ri];
-    var rowStart = cursor - step.gi; // flat index of this row's first group
-    rowGroups.forEach(function (text, gi) {
+    var rowStart = cursor - step.gi;
+    row.groups.forEach(function (text, gi) {
       var span = document.createElement("span");
       span.className = "kc";
       var fi = rowStart + gi;
@@ -446,19 +671,15 @@
       ctxEl.appendChild(span);
     });
 
-    // Next preview.
     if (cursor + 1 < max) {
       var n = flat[cursor + 1];
-      var nlabel = n.ri === step.ri ? n.text : "Row " + (n.ri + 1) + ": " + n.text;
-      nextEl.textContent = "Next: " + nlabel;
-    } else {
-      nextEl.textContent = "Last step of this repeat";
-    }
+      nextEl.textContent = "Next: " + (n.ri === step.ri ? n.text : rowLabel(proj.rows[n.ri]) + ": " + n.text);
+    } else { nextEl.textContent = "Last step of this repeat"; }
   }
 
   function knitAdvance() {
     var proj = activeProject();
-    if (getCursor(proj) >= totalSteps(proj)) return; // at end; use the CTA
+    if (getCursor(proj) >= totalSteps(proj)) return;
     setCursor(proj, getCursor(proj) + 1);
     refreshTracker();
   }
@@ -477,60 +698,37 @@
   var fIntro = document.getElementById("fieldIntro");
   var fRepeats = document.getElementById("fieldRepeats");
   var fRows = document.getElementById("fieldRows");
+  var pendingGlossary = null;
 
-  function openModal(title) {
-    document.getElementById("modalTitle").textContent = title;
-    modal.hidden = false;
-  }
-  function closeModal() {
-    modal.hidden = true;
-    statusEl.textContent = "";
-    statusEl.className = "modal-status";
-  }
-  function setStatus(msg, kind) {
-    statusEl.textContent = msg;
-    statusEl.className = "modal-status" + (kind ? " " + kind : "");
-  }
+  function openModal(title) { document.getElementById("modalTitle").textContent = title; modal.hidden = false; }
+  function closeModal() { modal.hidden = true; statusEl.textContent = ""; statusEl.className = "modal-status"; }
+  function setStatus(msg, kind) { statusEl.textContent = msg; statusEl.className = "modal-status" + (kind ? " " + kind : ""); }
 
   function openManual() {
-    fName.value = "";
-    fIntro.value = "";
-    fRepeats.value = "1";
-    fRows.value = "";
+    pendingGlossary = null;
+    fName.value = ""; fIntro.value = ""; fRepeats.value = "1"; fRows.value = "";
     setStatus("Paste your rows below, one per line.", "");
     openModal("Add pattern");
   }
 
-  // Save handler reads whatever is in the form (works for both PDF-prefilled
-  // and fully manual entry).
   function saveFromModal() {
     var name = fName.value.trim();
-    var rowsText = fRows.value;
-    var rowStrings = parseRowsFromText(rowsText);
-    if (!rowStrings.length) {
+    var ctx = { auto: 1 }, rows = [];
+    fRows.value.split(/\r?\n/).forEach(function (line) {
+      expandHeaderToRows(line, ctx).forEach(function (r) { rows.push(r); });
+    });
+    rows = dedupSortRows(rows);
+    if (!rows.length) {
       setStatus("No rows found. Add at least one line like “Row 1 — k2, p2”.", "error");
       return;
     }
-    var proj = makeProject(name, fIntro.value.trim(), parseInt(fRepeats.value, 10) || 1, rowStrings, []);
+    var glossary = buildGlossary(rows, pendingGlossary);
+    var proj = makeProject(name, fIntro.value.trim(), parseInt(fRepeats.value, 10) || 1, rows, glossary);
     store.projects.push(proj);
     save();
+    pendingGlossary = null;
     closeModal();
     openProject(proj.id);
-  }
-
-  // Turn a block of text into row strings, accepting either "Row N — ..."
-  // lines or plain one-row-per-line input.
-  function parseRowsFromText(text) {
-    var lines = text.split(/\r?\n/);
-    var rows = [];
-    var rowRe = /^\s*Row\s+\d+\s*[—–\-:.]?\s*(.+)$/i;
-    lines.forEach(function (line) {
-      var t = line.trim();
-      if (!t) return;
-      var m = t.match(rowRe);
-      rows.push(m ? m[1].trim() : t);
-    });
-    return rows;
   }
 
   /* ---------- PDF extraction (client-side via PDF.js) ---------- */
@@ -544,11 +742,9 @@
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
     var defaultName = file.name.replace(/\.pdf$/i, "");
+    pendingGlossary = null;
     openModal("Import “" + defaultName + "”");
-    fName.value = defaultName;
-    fIntro.value = "";
-    fRepeats.value = "1";
-    fRows.value = "";
+    fName.value = defaultName; fIntro.value = ""; fRepeats.value = "1"; fRows.value = "";
     setStatus("Reading PDF…", "");
 
     var reader = new FileReader();
@@ -562,9 +758,11 @@
             setStatus("Couldn’t detect rows automatically. Paste or edit them below, then add.", "error");
             return;
           }
-          fRows.value = parsed.rows.map(function (r, i) { return "Row " + (i + 1) + " — " + r; }).join("\n");
-          if (parsed.intro) fIntro.value = parsed.intro;
-          if (parsed.repeats) fRepeats.value = parsed.repeats;
+          fRows.value = parsed.rows.map(serializeRow).join("\n");
+          var introBits = [parsed.intro].concat(parsed.notes).filter(Boolean);
+          if (introBits.length) fIntro.value = introBits.join("\n");
+          fRepeats.value = parsed.repeats || 1;
+          pendingGlossary = parsed.glossary;
           setStatus("Found " + parsed.rows.length + " rows" +
             (parsed.repeats ? ", repeating " + parsed.repeats + "×" : "") +
             ". Review and tap “Add project”.", "ok");
@@ -577,8 +775,6 @@
     reader.readAsArrayBuffer(file);
   }
 
-  // Reconstruct text lines from a PDF document, ordering by page then by
-  // vertical position, inserting spaces from glyph geometry.
   function extractLines(pdf) {
     var pagePromises = [];
     for (var p = 1; p <= pdf.numPages; p++) pagePromises.push(pdf.getPage(p));
@@ -589,9 +785,7 @@
       contents.forEach(function (tc) {
         var items = tc.items
           .filter(function (it) { return it.str && it.str.trim() !== ""; })
-          .map(function (it) {
-            return { str: it.str, x: it.transform[4], y: it.transform[5], w: it.width || 0 };
-          });
+          .map(function (it) { return { str: it.str, x: it.transform[4], y: it.transform[5], w: it.width || 0 }; });
         items.sort(function (a, b) { return Math.abs(a.y - b.y) > 3 ? b.y - a.y : a.x - b.x; });
         var cur = null, curY = null, prev = null;
         items.forEach(function (it) {
@@ -600,47 +794,13 @@
             cur = it.str; curY = it.y; prev = it;
           } else {
             var gap = it.x - (prev.x + prev.w);
-            cur += (gap > 1 ? " " : "") + it.str;
-            prev = it;
+            cur += (gap > 1 ? " " : "") + it.str; prev = it;
           }
         });
         if (cur !== null) lines.push(cur.replace(/\s+/g, " ").trim());
       });
       return lines;
     });
-  }
-
-  // Parse reconstructed lines into { rows, intro, repeats }.
-  function parsePattern(lines) {
-    var rows = [];
-    var intro = "";
-    var repeats = 0;
-    var rowRe = /^Row\s+(\d+)\s*[—–\-:]\s*(.+)$/i;
-    var continues = /^[a-z(]/; // stitch instructions start lowercase or "("
-    var lastIsRow = false;
-
-    lines.forEach(function (line) {
-      var m = line.match(rowRe);
-      if (m) {
-        rows.push(m[2].trim());
-        lastIsRow = true;
-        return;
-      }
-      if (lastIsRow && continues.test(line) && line.indexOf("Copyright") === -1) {
-        // Wrapped continuation of the previous row.
-        rows[rows.length - 1] += " " + line.trim();
-        return;
-      }
-      lastIsRow = false;
-      if (!intro) {
-        var cast = line.match(/cast on[^.]*\.?/i);
-        if (cast) intro = cast[0].trim();
-      }
-      var rep = line.match(/repeat[^.]*?(\d+)\s*times/i);
-      if (rep) repeats = parseInt(rep[1], 10);
-    });
-
-    return { rows: rows, intro: intro, repeats: repeats };
   }
 
   /* ============================================================
@@ -652,7 +812,7 @@
   document.getElementById("pdfInput").addEventListener("change", function (e) {
     var file = e.target.files && e.target.files[0];
     if (file) importPdf(file);
-    e.target.value = ""; // allow re-importing the same file
+    e.target.value = "";
   });
   document.getElementById("manualBtn").addEventListener("click", openManual);
 
@@ -664,10 +824,7 @@
 
   document.getElementById("resetRepeat").addEventListener("click", function () {
     var proj = activeProject();
-    if (confirm("Clear progress for repeat " + proj.currentRepeat + "?")) {
-      setCursor(proj, 0);
-      refreshTracker();
-    }
+    if (confirm("Clear progress for repeat " + proj.currentRepeat + "?")) { setCursor(proj, 0); refreshTracker(); }
   });
   document.getElementById("deleteProject").addEventListener("click", function () {
     var proj = activeProject();
@@ -687,6 +844,5 @@
   document.getElementById("modalSave").addEventListener("click", saveFromModal);
   modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); });
 
-  // Start on the library.
   showLibrary();
 })();

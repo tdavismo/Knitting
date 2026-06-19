@@ -14,6 +14,16 @@ sample.
   and how many times to repeat them. You can review and edit everything before
   the project is created. If a PDF can't be parsed automatically, you can paste
   or type the rows in instead.
+- **Robust pattern parsing** — handles varied row headers (`Row 1 (RS):`,
+  `Row 1 — …`, `Rounds 1-3:`), expands range rows like
+  *"Row 6 and all following WS rows until row 34"* into the individual rows,
+  keeps bracketed/starred repeats (`[3/3, k1] × 2`, `*k1, p1*`) as single
+  tappable groups, and strips stitch-count annotations (`(42 sts)`).
+- **Stitch lexicon & glossary** — a built-in dictionary of *standard*,
+  non-copyrightable knitting abbreviations (Craft Yarn Council–style: k, p,
+  k2tog, ssk, yo, tbl, psso, m1, cables, …) auto-builds a glossary for whatever
+  abbreviations a pattern actually uses. An imported PDF's own abbreviation key
+  is also captured (kept on your device only).
 - **Tap to track (cursor model)** — each comma-separated stitch group becomes a
   tappable chip (S1, S2, …). Tapping a group marks it *and every earlier group*
   done (greyed out). Tapping an already-done group rolls back to just before it.
@@ -63,6 +73,16 @@ experience.
 PDF reading uses [PDF.js](https://mozilla.github.io/pdf.js/) loaded from a CDN at
 runtime, so importing a PDF needs an internet connection; everything else works
 offline once the page has loaded.
+
+## Copyright & privacy
+
+Knitting patterns are copyrighted by their designers. This app is a personal
+tracking tool: imported PDFs are parsed **in your browser** and the results are
+stored only in your device's `localStorage` — nothing is uploaded, shared, or
+committed to this repository. The only knitting content in the source code is
+the public-domain *Daphne* sample and a dictionary of **standard stitch
+abbreviations**, which are common terminology and not copyrightable. Please
+don't redistribute patterns you've imported.
 
 ---
 
