@@ -411,6 +411,11 @@
   function activeProject() {
     return store.projects.filter(function (p) { return p.id === store.activeId; })[0] || null;
   }
+  function removeProject(id) {
+    store.projects = store.projects.filter(function (p) { return p.id !== id; });
+    if (store.activeId === id) store.activeId = store.projects.length ? store.projects[0].id : null;
+    save();
+  }
 
   /* ============================================================
    * View switching
@@ -456,12 +461,23 @@
       card.className = "project-card";
       card.innerHTML =
         '<div class="pc-main"><h3></h3><div class="pc-meta"></div>' +
-        '<div class="pc-bar"><div class="pc-fill"></div></div></div><div class="pc-go">›</div>';
+        '<div class="pc-bar"><div class="pc-fill"></div></div></div>' +
+        '<button class="pc-del" aria-label="Delete project">🗑</button><div class="pc-go">›</div>';
       card.querySelector("h3").textContent = proj.name;
       card.querySelector(".pc-meta").textContent =
         proj.rows.length + " rows · " + proj.repeats + " repeat" + (proj.repeats === 1 ? "" : "s") + " · " + pct + "% done";
       card.querySelector(".pc-fill").style.width = pct + "%";
       card.addEventListener("click", function () { openProject(proj.id); });
+
+      var del = card.querySelector(".pc-del");
+      del.setAttribute("aria-label", "Delete " + proj.name);
+      del.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (confirm("Delete “" + proj.name + "” and its progress? This can’t be undone.")) {
+          removeProject(proj.id);
+          renderLibrary();
+        }
+      });
       listEl.appendChild(card);
     });
   }
@@ -829,9 +845,7 @@
   document.getElementById("deleteProject").addEventListener("click", function () {
     var proj = activeProject();
     if (confirm("Delete “" + proj.name + "” and its progress? This can’t be undone.")) {
-      store.projects = store.projects.filter(function (p) { return p.id !== proj.id; });
-      store.activeId = store.projects.length ? store.projects[0].id : null;
-      save();
+      removeProject(proj.id);
       showLibrary();
     }
   });
